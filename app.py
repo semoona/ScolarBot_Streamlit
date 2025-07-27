@@ -1,4 +1,4 @@
-# app.py (Definitive Version: Image Uploader on Top)
+# app.py (Definitive Version with Corrected Chat Logic)
 import streamlit as st
 import google.generativeai as genai
 import re
@@ -104,13 +104,11 @@ def stream_to_string_generator(stream):
         if chunk.text: yield chunk.text
 
 # --- Streamlit UI ---
-
-# <-- NEW: Image Uploader moved to the top of the main page in an expander.
 with st.expander("📎 Attach an Image (Optional)"):
     uploaded_file = st.file_uploader(
         "Upload a relevant image to discuss.",
         type=["jpg", "jpeg", "png", "webp"],
-        label_visibility="collapsed" # Hides the default label for a cleaner look
+        label_visibility="collapsed"
     )
     if uploaded_file:
         st.image(uploaded_file, caption="Your image will be sent with your next message.")
@@ -125,7 +123,7 @@ with st.sidebar:
     st.markdown("**ScholarBot** is an AI-powered chatbot designed to provide Pakistani students with initial information about Master's scholarship opportunities.")
     st.divider()
 
-    if st.button("✨ New Chat"):
+    if st.button("✨ New Chat", use_container_width=True):
         for key in st.session_state.keys():
             del st.session_state[key]
         st.rerun()
@@ -137,65 +135,59 @@ with st.sidebar:
         "Compare the Fulbright and Chevening scholarships.",
         "How do I write a good Statement of Purpose?",
     ]
+    # This logic now simply sets the prompt in session_state for the main app to handle
     for prompt_text in example_prompts:
-        if st.button(prompt_text):
-            st.session_state.user_input = prompt_text
+        if st.button(prompt_text, use_container_width=True):
+            st.session_state.new_prompt = prompt_text
             st.rerun()
-    # <-- The image uploader section has been REMOVED from the sidebar.
 
-# --- Chat History Display ---
+# --- Main Chat Logic (Restructured for Robustness) ---
+
+# Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! I am ScholarBot. Ask me about Master's scholarships abroad for Pakistani students."}]
 
+# Handle new user input from either the chat input or the example buttons
+if prompt := st.chat_input("Ask about scholarships...") or st.session_state.pop("new_prompt", None):
+    # Add user message to state immediately
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+# Display the entire chat history from the single source of truth: session_state
 for message in st.session_state.messages:
     avatar_icon = logo_image if message["role"] == "assistant" else "👤"
     with st.chat_message(name=message["role"], avatar=avatar_icon):
         st.markdown(message["content"])
 
-# --- Main Logic: Handle User Input ---
-prompt = None
-if st.session_state.get("user_input"):
-    prompt = st.session_state.user_input
-    del st.session_state.user_input
-elif chat_input := st.chat_input("Ask about scholarships..."):
-    prompt = chat_input
-
-if prompt:
-    if len(prompt) > 2000:
-        st.error("Your message is too long. Please keep your query under 2000 characters.")
-        st.stop()
-
-    user_message_content = prompt
+# Generate a new response if the last message is from the user
+if st.session_state.messages[-1]["role"] == "user":
+    user_message_content = st.session_state.messages[-1]["content"]
     image_to_send = None
     if uploaded_file:
         user_message_content += f"\n*(Image Attached: {uploaded_file.name})*"
         image_to_send = Image.open(uploaded_file)
 
-    st.session_state.messages.append({"role": "user", "content": user_message_content})
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(user_message_content)
-
     assistant_response = None
-    lower_case_prompt = prompt.lower()
+    lower_case_prompt = user_message_content.lower()
     if not image_to_send:
         if lower_case_prompt in faqs:
             assistant_response = faqs[lower_case_prompt]
-        elif not is_scholarship_query(prompt):
+        elif not is_scholarship_query(user_message_content):
             assistant_response = "I’m ScholarBot, here to help with Master’s scholarships! Please ask about scholarships, funding, or studying abroad (e.g., 'scholarships in Germany')."
-
-    if assistant_response:
-        with st.chat_message("assistant", avatar=logo_image):
+    
+    # Display the assistant's response
+    with st.chat_message("assistant", avatar=logo_image):
+        if assistant_response:
             st.markdown(assistant_response)
-        st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-    else:
-        api_prompt_parts = [prompt] if prompt else []
-        if image_to_send: api_prompt_parts.append(image_to_send)
-        with st.chat_message("assistant", avatar=logo_image):
+            # Add the simple response to the history
+            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+        else:
             status_placeholder.text("Thinking...")
+            api_prompt_parts = [user_message_content] if user_message_content else []
+            if image_to_send: api_prompt_parts.append(image_to_send)
             try:
                 response_stream = st.session_state.chat.send_message(api_prompt_parts, stream=True)
-                string_generator = stream_to_string_generator(response_stream)
-                full_response = st.write_stream(string_generator)
+                full_response = st.write_stream(response_stream)
+                # Add the generated response to the history
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
             except Exception as e:
                 print(f"AN ERROR OCCURRED: {e}")
@@ -204,3 +196,6 @@ if prompt:
                 st.session_state.messages.append({"role": "assistant", "content": error_message})
             finally:
                 status_placeholder.text("Ready")
+    
+    # Rerun to finalize the display and wait for the next input
+    st.rerun()
