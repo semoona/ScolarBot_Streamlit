@@ -1,4 +1,4 @@
-# app.py (Definitive Version with Corrected Chat Logic)
+# app.py (Definitive Version with ALL Fixes)
 import streamlit as st
 import google.generativeai as genai
 import re
@@ -99,9 +99,12 @@ if "chat" not in st.session_state:
     chat_history_for_api = [genai.types.Content(role=msg["role"], parts=[genai.types.Part(text=msg["content"])]) for msg in st.session_state.get("messages", [])]
     st.session_state.chat = model.start_chat(history=chat_history_for_api)
 
+# <-- BUG FIX: Re-introducing the essential helper function.
 def stream_to_string_generator(stream):
+    """Takes a stream of Gemini API chunks and yields just the text content."""
     for chunk in stream:
-        if chunk.text: yield chunk.text
+        if chunk.text:
+            yield chunk.text
 
 # --- Streamlit UI ---
 with st.expander("📎 Attach an Image (Optional)"):
@@ -135,24 +138,22 @@ with st.sidebar:
         "Compare the Fulbright and Chevening scholarships.",
         "How do I write a good Statement of Purpose?",
     ]
-    # This logic now simply sets the prompt in session_state for the main app to handle
     for prompt_text in example_prompts:
         if st.button(prompt_text, use_container_width=True):
             st.session_state.new_prompt = prompt_text
             st.rerun()
 
-# --- Main Chat Logic (Restructured for Robustness) ---
+# --- Main Chat Logic (Corrected) ---
 
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! I am ScholarBot. Ask me about Master's scholarships abroad for Pakistani students."}]
 
-# Handle new user input from either the chat input or the example buttons
+# Handle new user input
 if prompt := st.chat_input("Ask about scholarships...") or st.session_state.pop("new_prompt", None):
-    # Add user message to state immediately
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-# Display the entire chat history from the single source of truth: session_state
+# Display the entire chat history
 for message in st.session_state.messages:
     avatar_icon = logo_image if message["role"] == "assistant" else "👤"
     with st.chat_message(name=message["role"], avatar=avatar_icon):
@@ -174,20 +175,19 @@ if st.session_state.messages[-1]["role"] == "user":
         elif not is_scholarship_query(user_message_content):
             assistant_response = "I’m ScholarBot, here to help with Master’s scholarships! Please ask about scholarships, funding, or studying abroad (e.g., 'scholarships in Germany')."
     
-    # Display the assistant's response
     with st.chat_message("assistant", avatar=logo_image):
         if assistant_response:
             st.markdown(assistant_response)
-            # Add the simple response to the history
             st.session_state.messages.append({"role": "assistant", "content": assistant_response})
         else:
             status_placeholder.text("Thinking...")
             api_prompt_parts = [user_message_content] if user_message_content else []
             if image_to_send: api_prompt_parts.append(image_to_send)
             try:
+                # <-- BUG FIX: Calling the helper function to translate the raw stream.
                 response_stream = st.session_state.chat.send_message(api_prompt_parts, stream=True)
-                full_response = st.write_stream(response_stream)
-                # Add the generated response to the history
+                string_generator = stream_to_string_generator(response_stream)
+                full_response = st.write_stream(string_generator)
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
             except Exception as e:
                 print(f"AN ERROR OCCURRED: {e}")
@@ -197,5 +197,4 @@ if st.session_state.messages[-1]["role"] == "user":
             finally:
                 status_placeholder.text("Ready")
     
-    # Rerun to finalize the display and wait for the next input
     st.rerun()
