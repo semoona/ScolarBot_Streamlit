@@ -1,4 +1,4 @@
-# app.py (Definitive Version with ALL Fixes)
+# app.py (Definitive Version: Uploader in Sidebar for Visibility)
 import streamlit as st
 import google.generativeai as genai
 import re
@@ -74,7 +74,12 @@ scholarship_keywords = [
     "chevening", "daad", "fulbright", "erasmus", "australia awards",
     "uk", "usa", "germany", "europe", "australia", "japan", "korea", "malaysia",
     "canada", "france", "italy", "finland", "china", "thailand", "indonesia",
-    "stipend", "tuition", "application", "deadline", "eligibility"
+    "stipend", "tuition", "application", "deadline", "eligibility" , "statement of purpose" , 
+    "SOP" , "CV" , "Resume" , "Research Paper" , "GKS" , "Korean Government Scholarship" , 
+    "Korean Scholarship" , "Korean University Scholarship" , "Korean University Admission" , 
+    "Korean University Application" , "Korean University Admission Process" ,
+    "Korean University Application Process", "MEXT", "MEXT Scholarship", "Japanese Government Scholarship",
+    "Japanese Scholarship", "Japanese University Scholarship", "Japanese University Admission",
 ]
 def is_scholarship_query(user_input):
     lower_case_input = user_input.lower()
@@ -99,28 +104,16 @@ if "chat" not in st.session_state:
     chat_history_for_api = [genai.types.Content(role=msg["role"], parts=[genai.types.Part(text=msg["content"])]) for msg in st.session_state.get("messages", [])]
     st.session_state.chat = model.start_chat(history=chat_history_for_api)
 
-# <-- BUG FIX: Re-introducing the essential helper function.
 def stream_to_string_generator(stream):
-    """Takes a stream of Gemini API chunks and yields just the text content."""
     for chunk in stream:
-        if chunk.text:
-            yield chunk.text
+        if chunk.text: yield chunk.text
 
 # --- Streamlit UI ---
-with st.expander("📎 Attach an Image (Optional)"):
-    uploaded_file = st.file_uploader(
-        "Upload a relevant image to discuss.",
-        type=["jpg", "jpeg", "png", "webp"],
-        label_visibility="collapsed"
-    )
-    if uploaded_file:
-        st.image(uploaded_file, caption="Your image will be sent with your next message.")
-
 st.title("ScholarBot")
 status_placeholder = st.empty()
 status_placeholder.text("Ready")
 
-# --- Sidebar with Control Features ---
+# --- Sidebar with ALL Control Features ---
 with st.sidebar:
     st.header("About This Project")
     st.markdown("**ScholarBot** is an AI-powered chatbot designed to provide Pakistani students with initial information about Master's scholarship opportunities.")
@@ -130,6 +123,17 @@ with st.sidebar:
         for key in st.session_state.keys():
             del st.session_state[key]
         st.rerun()
+
+    # <-- NEW: Image Uploader moved back to the sidebar for persistent visibility.
+    st.divider()
+    st.header("📎 Attach an Image")
+    uploaded_file = st.file_uploader(
+        "Upload an image to discuss with the bot.",
+        type=["jpg", "jpeg", "png", "webp"],
+        label_visibility="collapsed"
+    )
+    if uploaded_file:
+        st.image(uploaded_file) # Display a small preview in the sidebar
 
     st.divider()
     st.header("Example Prompts")
@@ -143,23 +147,18 @@ with st.sidebar:
             st.session_state.new_prompt = prompt_text
             st.rerun()
 
-# --- Main Chat Logic (Corrected) ---
-
-# Initialize chat history
+# --- Main Chat Logic (No changes needed here) ---
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! I am ScholarBot. Ask me about Master's scholarships abroad for Pakistani students."}]
 
-# Handle new user input
 if prompt := st.chat_input("Ask about scholarships...") or st.session_state.pop("new_prompt", None):
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-# Display the entire chat history
 for message in st.session_state.messages:
     avatar_icon = logo_image if message["role"] == "assistant" else "👤"
     with st.chat_message(name=message["role"], avatar=avatar_icon):
         st.markdown(message["content"])
 
-# Generate a new response if the last message is from the user
 if st.session_state.messages[-1]["role"] == "user":
     user_message_content = st.session_state.messages[-1]["content"]
     image_to_send = None
@@ -184,7 +183,6 @@ if st.session_state.messages[-1]["role"] == "user":
             api_prompt_parts = [user_message_content] if user_message_content else []
             if image_to_send: api_prompt_parts.append(image_to_send)
             try:
-                # <-- BUG FIX: Calling the helper function to translate the raw stream.
                 response_stream = st.session_state.chat.send_message(api_prompt_parts, stream=True)
                 string_generator = stream_to_string_generator(response_stream)
                 full_response = st.write_stream(string_generator)
