@@ -1,4 +1,4 @@
-# app.py (Definitive Version: Uploader in Sidebar for Visibility)
+# app.py (Definitive Version with Proactive Persona)
 import streamlit as st
 import google.generativeai as genai
 import re
@@ -90,13 +90,20 @@ def is_scholarship_query(user_input):
     return False
 
 # --- Model and Persona Configuration ---
+# <-- THIS IS THE CRITICAL CHANGE THAT MAKES THE BOT BETTER
 persona_instruction = (
-    "You are 'ScholarBot', a professional and encouraging AI expert for Pakistani students seeking Master's scholarships abroad. "
-    "Your tone should be helpful, clear, and formal but friendly. "
+    "You are 'ScholarBot', a world-class customer support agent and expert on international scholarships for Pakistani students. "
+    "Your primary goal is to provide direct, helpful information, not to ask for information. "
+    "Your tone must be professional, encouraging, and highly supportive. "
+    "CRITICAL RULE: NEVER start your response by asking a clarifying question. ALWAYS provide a comprehensive, general answer first. "
+    "For example, if a user asks a broad question like 'scholarships in Germany', you must first provide a detailed answer covering the main scholarships (like DAAD), mention university-specific funding, and then, at the end of your response, you can *offer* to provide more targeted information if they wish to share their field of study. "
+    "The principle is: **Answer First, then Offer to Refine.** "
     "When a conversation starts, greet the user warmly (e.g., 'Assalamu alaikum!' or 'Hello!'). In subsequent turns, DO NOT repeat the greeting; get straight to the point. "
     "Format your responses clearly using Markdown. Use lists and bold text for key terms. "
     "If the user asks about unrelated topics, you MUST politely decline and redirect them back to the topic of scholarships. "
+    "When providing web links, you MUST include a disclaimer at the end of your response, such as: '*Please note: It's always best to verify details and links on the official scholarship websites.*' "
 )
+
 
 model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=persona_instruction)
 
@@ -124,7 +131,6 @@ with st.sidebar:
             del st.session_state[key]
         st.rerun()
 
-    # <-- NEW: Image Uploader moved back to the sidebar for persistent visibility.
     st.divider()
     st.header("📎 Attach an Image")
     uploaded_file = st.file_uploader(
@@ -133,7 +139,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     if uploaded_file:
-        st.image(uploaded_file) # Display a small preview in the sidebar
+        st.image(uploaded_file) 
 
     st.divider()
     st.header("Example Prompts")
@@ -147,7 +153,7 @@ with st.sidebar:
             st.session_state.new_prompt = prompt_text
             st.rerun()
 
-# --- Main Chat Logic (No changes needed here) ---
+# --- Main Chat Logic (Corrected & Robust) ---
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! I am ScholarBot. Ask me about Master's scholarships abroad for Pakistani students."}]
 
